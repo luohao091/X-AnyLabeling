@@ -1590,6 +1590,11 @@ class AutoLabelingWidget(QWidget):
                             widget_value
                         )
 
+                if widget_placeholder is not None and hasattr(
+                    widget, "setPlaceholderText"
+                ):
+                    widget.setPlaceholderText(widget_placeholder)
+
         class_items = self._extract_remote_class_items(model_id, model_info)
         if class_items:
             self.button_class_filter.show()
@@ -1597,11 +1602,6 @@ class AutoLabelingWidget(QWidget):
         else:
             self.button_class_filter.hide()
             self.model_manager.set_remote_server_classes(None)
-
-                if widget_placeholder is not None and hasattr(
-                    widget, "setPlaceholderText"
-                ):
-                    widget.setPlaceholderText(widget_placeholder)
 
     def on_auto_decode_toggled(self):
         """Handle AMD button toggle"""
