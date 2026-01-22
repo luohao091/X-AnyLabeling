@@ -489,14 +489,14 @@ class LabelingWidget(LabelDialog):
         )
 
         delete_file_confirm_mode = action(
-            self.tr("Confirm Delete Label File"),
+            self.tr("删除标签文件需确认"),
             lambda x: (
                 self._config.update({"delete_file_confirm": x}),
                 save_config(self._config),
             ),
             None,
             None,
-            self.tr("Require confirmation when deleting label file"),
+            self.tr("删除标签文件时需要二次确认"),
             checkable=True,
             checked=self._config.get("delete_file_confirm", False),
         )
