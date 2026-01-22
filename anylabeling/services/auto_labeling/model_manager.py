@@ -162,6 +162,45 @@ class ModelManager(QObject):
                 ):
                     self.loaded_model_config[key] = value
                 break
+        self._persist_model_config(config_file, key, value)
+
+    def _persist_model_config(self, config_file, key, value):
+        local_configs_dir = get_local_configs_dir()
+        target_path = None
+        if config_file.startswith(":/"):
+            if local_configs_dir:
+                config_file_name = config_file[2:]
+                target_path = os.path.join(
+                    local_configs_dir, "auto_labeling", config_file_name
+                )
+        else:
+            target_path = config_file
+
+        if not target_path:
+            return
+
+        target_dir = os.path.dirname(target_path)
+        if target_dir:
+            os.makedirs(target_dir, exist_ok=True)
+
+        if not os.path.isfile(target_path) and config_file.startswith(":/"):
+            config_file_name = config_file[2:]
+            resource_path = pkg_resources.files(
+                auto_labeling_configs
+            ).joinpath("auto_labeling", config_file_name)
+            config_content = resource_path.read_text(encoding="utf-8")
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(config_content)
+
+        try:
+            with open(target_path, "r", encoding="utf-8") as f:
+                config_data = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            config_data = {}
+
+        config_data[key] = value
+        with open(target_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config_data, f, allow_unicode=True)
 
     def get_model_configs(self):
         """Return model infos"""
