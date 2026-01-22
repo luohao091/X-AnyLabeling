@@ -47,6 +47,7 @@ from anylabeling.views.labeling.widgets.searchable_model_dropdown import (
     _MODELS_CONFIG_PATH,
     SearchableModelDropdownPopup,
 )
+from anylabeling.config import get_local_configs_dir
 
 COCO_CLASS_NAMES = [
     "person",
@@ -660,11 +661,27 @@ class AutoLabelingWidget(QWidget):
                 model_config = {}
                 try:
                     config_file_name = config_path[2:]
-                    resource_path = pkg_resources.files(
-                        anylabeling_configs
-                    ).joinpath("auto_labeling", config_file_name)
-                    config_content = resource_path.read_text(encoding="utf-8")
-                    model_config = yaml.safe_load(config_content)
+                    local_configs_dir = get_local_configs_dir()
+                    local_config = (
+                        os.path.join(
+                            local_configs_dir,
+                            "auto_labeling",
+                            config_file_name,
+                        )
+                        if local_configs_dir
+                        else None
+                    )
+                    if local_config and os.path.isfile(local_config):
+                        with open(local_config, "r", encoding="utf-8") as f:
+                            model_config = yaml.safe_load(f)
+                    else:
+                        resource_path = pkg_resources.files(
+                            anylabeling_configs
+                        ).joinpath("auto_labeling", config_file_name)
+                        config_content = resource_path.read_text(
+                            encoding="utf-8"
+                        )
+                        model_config = yaml.safe_load(config_content)
 
                     default_url = model_config.get(
                         "server_url", "http://127.0.0.1:8000/"
