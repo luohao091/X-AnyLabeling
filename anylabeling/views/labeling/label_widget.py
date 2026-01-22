@@ -5072,7 +5072,7 @@ class LabelingWidget(LabelDialog):
             )
             return
 
-        confirm_delete = self._config.get("delete_file_confirm", True)
+        confirm_delete = self._config.get("delete_file_confirm", False)
         if confirm_delete:
             msg = self.tr(
                 "You are about to permanently delete this label file, "
