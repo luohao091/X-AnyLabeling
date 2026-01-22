@@ -33,7 +33,6 @@ from PyQt5.QtWidgets import (
 
 from anylabeling.services.auto_labeling.types import AutoLabelingMode
 from anylabeling.services.auto_labeling import _THUMBNAIL_RENDER_MODELS
-from anylabeling.views.training import UltralyticsDialog
 
 from ...app_info import (
     __appname__,
@@ -2619,6 +2618,22 @@ class LabelingWidget(LabelDialog):
     # Trainer
     def start_training(self, mode):
         if mode == "ultralytics":
+            try:
+                import torch  # noqa: F401
+            except Exception as e:
+                self.error_message(
+                    "Training Unavailable",
+                    (
+                        "PyTorch is not available or failed to load. "
+                        "Please install a compatible PyTorch build or "
+                        "use the full package build.\n\n"
+                        f"Details: {str(e)}"
+                    ),
+                )
+                return
+
+            from anylabeling.views.training import UltralyticsDialog
+
             dialog = UltralyticsDialog(self)
         else:
             return
@@ -2627,7 +2642,12 @@ class LabelingWidget(LabelDialog):
             _ = dialog.exec_()
         except Exception as e:
             self.error_message(
-                "Start Error", f"Failed to start training dialog: {str(e)}"
+                "Training Error",
+                (
+                    "Failed to start training. This is often caused by "
+                    "missing or incompatible PyTorch dependencies.\n\n"
+                    f"Details: {str(e)}"
+                ),
             )
 
     # Tools
