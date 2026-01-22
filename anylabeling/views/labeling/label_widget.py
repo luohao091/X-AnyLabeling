@@ -5052,13 +5052,15 @@ class LabelingWidget(LabelDialog):
             )
             return
 
-        msg = self.tr(
-            "You are about to permanently delete this label file, "
-            "proceed anyway?"
-        )
-        answer = mb.warning(self, self.tr("Attention"), msg, mb.Yes | mb.No)
-        if answer != mb.Yes:
-            return
+        confirm_delete = self._config.get("delete_file_confirm", True)
+        if confirm_delete:
+            msg = self.tr(
+                "You are about to permanently delete this label file, "
+                "proceed anyway?"
+            )
+            answer = mb.warning(self, self.tr("Attention"), msg, mb.Yes | mb.No)
+            if answer != mb.Yes:
+                return
 
         label_file = self.get_label_file()
         if osp.exists(label_file):
