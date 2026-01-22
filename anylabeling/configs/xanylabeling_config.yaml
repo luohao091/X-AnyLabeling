@@ -25,7 +25,7 @@ show_attributes: true
 logger_level: info
 system_clipboard: false
 switch_to_checked: false
-delete_file_confirm: true
+delete_file_confirm: false
 file_list_checkbox_editable: false
 
 flags: null
@@ -126,7 +126,7 @@ shortcuts:
   save: Ctrl+S
   save_as: Ctrl+Shift+S
   save_to: null
-  delete_file: Ctrl+Delete
+  delete_file: Delete
   delete_image_file: Ctrl+Shift+Delete
 
   open_next: D
@@ -149,7 +149,7 @@ shortcuts:
   create_point: null
   create_linestrip: null
   edit_polygon: Ctrl+J
-  delete_polygon: Delete
+  delete_polygon: Ctrl+Delete
   duplicate_polygon: Ctrl+D
   copy_polygon: Ctrl+C
   paste_polygon: Ctrl+V
