@@ -1,4 +1,6 @@
+import os
 import os.path as osp
+import sys
 import shutil
 import yaml
 import importlib.resources as pkg_resources
@@ -8,6 +10,18 @@ from anylabeling.views.labeling.logger import logger
 
 
 current_config_file = None
+
+
+def get_local_configs_dir():
+    base_dir = None
+    if getattr(sys, "frozen", False):
+        base_dir = osp.dirname(sys.executable)
+    else:
+        base_dir = os.getcwd()
+    local_dir = osp.join(base_dir, "configs")
+    if osp.isdir(local_dir):
+        return local_dir
+    return None
 
 
 def update_dict(target_dict, new_dict, validate_item=None):
@@ -39,13 +53,25 @@ def get_default_config():
         shutil.copyfile(old_cfg_file, new_cfg_file)
 
     config_file = "xanylabeling_config.yaml"
-    with pkg_resources.open_text(anylabeling_configs, config_file) as f:
-        config = yaml.safe_load(f)
+    local_dir = get_local_configs_dir()
+    local_config = (
+        osp.join(local_dir, config_file) if local_dir else None
+    )
+    if local_config and osp.isfile(local_config):
+        with open(local_config, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    else:
+        with pkg_resources.open_text(anylabeling_configs, config_file) as f:
+            config = yaml.safe_load(f)
 
     # Save default config to ~/.xanylabelingrc
-    if not osp.exists(osp.join(osp.expanduser("~"), ".xanylabelingrc")):
+    if (
+        not osp.exists(osp.join(osp.expanduser("~"), ".xanylabelingrc"))
+        and (not local_config or not osp.isfile(local_config))
+    ):
         save_config(config)
 
+    config["language"] = "zh_CN"
     return config
 
 

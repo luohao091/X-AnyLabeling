@@ -148,6 +148,13 @@ def main():
     default_config_file = os.path.join(
         os.path.expanduser("~"), ".xanylabelingrc"
     )
+    local_configs_dir = anylabeling_config.get_local_configs_dir()
+    if local_configs_dir:
+        local_config_file = os.path.join(
+            local_configs_dir, "xanylabeling_config.yaml"
+        )
+        if os.path.isfile(local_config_file):
+            default_config_file = local_config_file
     parser.add_argument(
         "--config",
         dest="config",

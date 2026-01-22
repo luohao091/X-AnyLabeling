@@ -10,7 +10,7 @@ from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 import anylabeling.configs as auto_labeling_configs
 from anylabeling.utils import GenericWorker
 from anylabeling.views.labeling.logger import logger
-from anylabeling.config import get_config, save_config
+from anylabeling.config import get_config, save_config, get_local_configs_dir
 from anylabeling.services.auto_labeling.types import AutoLabelingResult
 from anylabeling.services.auto_labeling.utils import TimeoutContext
 from anylabeling.services.auto_labeling import (
@@ -61,10 +61,20 @@ class ModelManager(QObject):
     def load_model_configs(self):
         """Load model configs"""
         # Load list of default models
-        with pkg_resources.open_text(
-            auto_labeling_configs, "models.yaml"
-        ) as f:
-            model_list = yaml.safe_load(f)
+        local_configs_dir = get_local_configs_dir()
+        local_models = (
+            os.path.join(local_configs_dir, "models.yaml")
+            if local_configs_dir
+            else None
+        )
+        if local_models and os.path.isfile(local_models):
+            with open(local_models, "r", encoding="utf-8") as f:
+                model_list = yaml.safe_load(f)
+        else:
+            with pkg_resources.open_text(
+                auto_labeling_configs, "models.yaml"
+            ) as f:
+                model_list = yaml.safe_load(f)
 
         # Load list of custom models
         custom_models = get_config().get("custom_models", [])
@@ -90,12 +100,29 @@ class ModelManager(QObject):
             config_file = model["config_file"]
             if config_file.startswith(":/"):  # Config file is in resources
                 config_file_name = config_file[2:]
-                resource_path = pkg_resources.files(
-                    auto_labeling_configs
-                ).joinpath("auto_labeling", config_file_name)
-                config_content = resource_path.read_text(encoding="utf-8")
-                model_config = yaml.safe_load(config_content)
-                model_config["config_file"] = str(config_file)
+                local_auto_labeling = (
+                    os.path.join(local_configs_dir, "auto_labeling")
+                    if local_configs_dir
+                    else None
+                )
+                local_config = (
+                    os.path.join(local_auto_labeling, config_file_name)
+                    if local_auto_labeling
+                    else None
+                )
+                if local_config and os.path.isfile(local_config):
+                    with open(local_config, "r", encoding="utf-8") as f:
+                        model_config = yaml.safe_load(f)
+                        model_config["config_file"] = os.path.normpath(
+                            os.path.abspath(local_config)
+                        )
+                else:
+                    resource_path = pkg_resources.files(
+                        auto_labeling_configs
+                    ).joinpath("auto_labeling", config_file_name)
+                    config_content = resource_path.read_text(encoding="utf-8")
+                    model_config = yaml.safe_load(config_content)
+                    model_config["config_file"] = str(config_file)
             else:  # Config file is in local file system
                 with open(config_file, "r", encoding="utf-8") as f:
                     model_config = yaml.safe_load(f)
