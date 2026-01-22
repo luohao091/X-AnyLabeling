@@ -488,6 +488,19 @@ class LabelingWidget(LabelDialog):
             checked=self._config["keep_prev"],
         )
 
+        delete_file_confirm_mode = action(
+            self.tr("Confirm Delete Label File"),
+            lambda x: (
+                self._config.update({"delete_file_confirm": x}),
+                save_config(self._config),
+            ),
+            None,
+            None,
+            self.tr("Require confirmation when deleting label file"),
+            checkable=True,
+            checked=self._config.get("delete_file_confirm", False),
+        )
+
         auto_use_last_label_mode = action(
             self.tr("Auto Use Last Label"),
             lambda x: self._config.update({"auto_use_last_label": x}),
@@ -1484,6 +1497,7 @@ class LabelingWidget(LabelDialog):
             delete_file=delete_file,
             delete_image_file=delete_image_file,
             keep_prev_mode=keep_prev_mode,
+            delete_file_confirm_mode=delete_file_confirm_mode,
             auto_use_last_label_mode=auto_use_last_label_mode,
             auto_use_last_gid_mode=auto_use_last_gid_mode,
             use_system_clipboard=use_system_clipboard,
@@ -1705,6 +1719,7 @@ class LabelingWidget(LabelDialog):
                 save_with_image_data,
                 close,
                 delete_file,
+                delete_file_confirm_mode,
                 delete_image_file,
                 None,
             ),
