@@ -596,12 +596,15 @@ class Canvas(
         # - Highlight vertex
         # Update shape/vertex fill and tooltip value accordingly.
         self.setToolTip(self.tr("Image"))
-        for shape in reversed([s for s in self.shapes if self.is_visible(s)]):
+        visible_shapes = [s for s in self.shapes if self.is_visible(s)]
+        hovered_shape = None
+        for shape in reversed(visible_shapes):
             # Look for a nearby vertex to highlight. If that fails,
             # check if we happen to be inside a shape.
             index = shape.nearest_vertex(pos, self.epsilon / self.scale)
             index_edge = shape.nearest_edge(pos, self.epsilon / self.scale)
             if index is not None:
+                hovered_shape = shape
                 if self.selected_vertex():
                     self.h_hape.highlight_clear()
                 self.prev_h_vertex = self.h_vertex = index
@@ -618,6 +621,7 @@ class Canvas(
                 self.update()
                 break
             if index_edge is not None and shape.can_add_point():
+                hovered_shape = shape
                 if self.selected_vertex():
                     self.h_hape.highlight_clear()
                 self.prev_h_vertex = self.h_vertex
@@ -632,33 +636,88 @@ class Canvas(
                 self.setStatusTip(self.toolTip())
                 self.update()
                 break
-            shape_hit = False
-            if shape.shape_type in ["point", "line", "linestrip"]:
-                nearest_index = shape.nearest_vertex(
-                    pos, self.epsilon * 3 / self.scale
-                )
-                if nearest_index is not None:
-                    shape_hit = True
-            elif len(shape.points) > 1 and shape.contains_point(pos):
-                shape_hit = True
 
-            if shape_hit:
+        if hovered_shape is None:
+            hit_shapes = []
+            for shape in visible_shapes:
+                shape_hit = False
+                if shape.shape_type in ["point", "line", "linestrip"]:
+                    nearest_index = shape.nearest_vertex(
+                        pos, self.epsilon * 3 / self.scale
+                    )
+                    if nearest_index is not None:
+                        shape_hit = True
+                elif len(shape.points) > 1 and shape.contains_point(pos):
+                    shape_hit = True
+
+                if shape_hit:
+                    hit_shapes.append(shape)
+
+            if hit_shapes:
+                def shape_area(s):
+                    if len(s.points) < 3:
+                        rect = s.bounding_rect()
+                        return rect.width() * rect.height()
+                    area = 0.0
+                    pts = s.points
+                    for i in range(len(pts)):
+                        p1 = pts[i]
+                        p2 = pts[(i + 1) % len(pts)]
+                        area += p1.x() * p2.y() - p2.x() * p1.y()
+                    return abs(area) / 2.0
+
+                def shape_edge_distance(s, point):
+                    if not s.points:
+                        return float("inf")
+                    if s.shape_type == "point":
+                        return utils.distance(s.points[0] - point)
+                    points = s.points
+                    min_dist = float("inf")
+                    if s.shape_type in ["line", "linestrip"]:
+                        for i in range(1, len(points)):
+                            line = [points[i - 1], points[i]]
+                            min_dist = min(
+                                min_dist,
+                                utils.distance_to_line(point, line),
+                            )
+                    else:
+                        for i in range(len(points)):
+                            line = [points[i - 1], points[i]]
+                            min_dist = min(
+                                min_dist,
+                                utils.distance_to_line(point, line),
+                            )
+                    return min_dist
+
+                hovered_shape = min(
+                    hit_shapes,
+                    key=lambda s: (
+                        shape_edge_distance(s, pos),
+                        shape_area(s),
+                        -self.shapes.index(s),
+                    ),
+                )
+
                 if self.selected_vertex():
                     self.h_hape.highlight_clear()
                 self.prev_h_vertex = self.h_vertex
                 self.h_vertex = None
-                self.prev_h_shape = self.h_hape = shape
+                self.prev_h_shape = self.h_hape = hovered_shape
                 self.prev_h_edge = self.h_edge
                 self.h_edge = None
-                if shape.group_id and shape.shape_type == "rectangle":
+                if (
+                    hovered_shape.group_id
+                    and hovered_shape.shape_type == "rectangle"
+                ):
                     tooltip_text = "Click & drag to move shape '{label} {group_id}'".format(
-                        label=shape.label, group_id=shape.group_id
+                        label=hovered_shape.label,
+                        group_id=hovered_shape.group_id,
                     )
                     self.setToolTip(self.tr(tooltip_text))
                 else:
                     self.setToolTip(
                         self.tr("Click & drag to move shape '%s'")
-                        % shape.label
+                        % hovered_shape.label
                     )
                 self.setStatusTip(self.toolTip())
                 self.override_cursor(CURSOR_GRAB)
@@ -672,14 +731,13 @@ class Canvas(
                     )
                 self.update()
 
-                if shape.shape_type == "rectangle":
+                if hovered_shape.shape_type == "rectangle":
                     p1 = self.h_hape[0]
                     p2 = self.h_hape[2]
                     shape_width = int(abs(p2.x() - p1.x()))
                     shape_height = int(abs(p2.y() - p1.y()))
                     self.show_shape.emit(shape_width, shape_height, pos)
-                break
-        else:  # Nothing found, clear highlights, reset state.
+        if hovered_shape is None:  # Nothing found, clear highlights.
             self.un_highlight()
             self.override_cursor(CURSOR_DEFAULT)
         self.vertex_selected.emit(self.h_vertex is not None)
@@ -994,38 +1052,85 @@ class Canvas(
                 return
 
         else:
-            for shape in reversed(self.shapes):
+            hit_shapes = []
+            for shape in self.shapes:
+                if not self.is_visible(shape):
+                    continue
                 shape_selectable = False
-                if shape.shape_type in ["point", "line", "linestrip"]:
-                    if (
-                        self.is_visible(shape)
-                        and shape.nearest_vertex(
-                            point, self.epsilon * 3 / self.scale
-                        )
-                        is not None
-                    ):
+                if shape.shape_type == "point":
+                    if shape.nearest_vertex(
+                        point, self.epsilon * 3 / self.scale
+                    ) is not None:
                         shape_selectable = True
-                elif (
-                    self.is_visible(shape)
-                    and len(shape.points) > 1
-                    and shape.contains_point(point)
-                ):
+                elif shape.shape_type in ["line", "linestrip"]:
+                    nearest_index = shape.nearest_vertex(
+                        point, self.epsilon * 3 / self.scale
+                    )
+                    if nearest_index is not None:
+                        shape_selectable = True
+                elif len(shape.points) > 1 and shape.contains_point(point):
                     shape_selectable = True
 
                 if shape_selectable:
-                    self.set_hiding()
-                    if shape not in self.selected_shapes:
-                        if multiple_selection_mode:
-                            self.selection_changed.emit(
-                                self.selected_shapes + [shape]
+                    hit_shapes.append(shape)
+
+            if hit_shapes:
+                def shape_area(s):
+                    if len(s.points) < 3:
+                        rect = s.bounding_rect()
+                        return rect.width() * rect.height()
+                    area = 0.0
+                    pts = s.points
+                    for i in range(len(pts)):
+                        p1 = pts[i]
+                        p2 = pts[(i + 1) % len(pts)]
+                        area += p1.x() * p2.y() - p2.x() * p1.y()
+                    return abs(area) / 2.0
+
+                def shape_edge_distance(s, pt):
+                    if not s.points:
+                        return float("inf")
+                    if s.shape_type == "point":
+                        return utils.distance(s.points[0] - pt)
+                    points = s.points
+                    min_dist = float("inf")
+                    if s.shape_type in ["line", "linestrip"]:
+                        for i in range(1, len(points)):
+                            line = [points[i - 1], points[i]]
+                            min_dist = min(
+                                min_dist,
+                                utils.distance_to_line(pt, line),
                             )
-                        else:
-                            self.selection_changed.emit([shape])
-                        self.h_shape_is_selected = False
                     else:
-                        self.h_shape_is_selected = True
-                    self.calculate_offsets(point)
-                    return
+                        for i in range(len(points)):
+                            line = [points[i - 1], points[i]]
+                            min_dist = min(
+                                min_dist,
+                                utils.distance_to_line(pt, line),
+                            )
+                    return min_dist
+
+                selected_shape = min(
+                    hit_shapes,
+                    key=lambda s: (
+                        shape_edge_distance(s, point),
+                        shape_area(s),
+                        -self.shapes.index(s),
+                    ),
+                )
+                self.set_hiding()
+                if selected_shape not in self.selected_shapes:
+                    if multiple_selection_mode:
+                        self.selection_changed.emit(
+                            self.selected_shapes + [selected_shape]
+                        )
+                    else:
+                        self.selection_changed.emit([selected_shape])
+                    self.h_shape_is_selected = False
+                else:
+                    self.h_shape_is_selected = True
+                self.calculate_offsets(point)
+                return
         self.deselect_shape()
 
     def calculate_offsets(self, point):
