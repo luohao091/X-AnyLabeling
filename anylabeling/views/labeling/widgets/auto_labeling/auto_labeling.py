@@ -8,7 +8,15 @@ from PyQt5 import uic
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QPoint
 from PyQt5.QtWidgets import (
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -40,6 +48,174 @@ from anylabeling.views.labeling.widgets.searchable_model_dropdown import (
     SearchableModelDropdownPopup,
 )
 
+COCO_CLASS_NAMES = [
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "airplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "couch",
+    "potted plant",
+    "bed",
+    "dining table",
+    "toilet",
+    "tv",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
+]
+
+
+class ClassFilterDialog(QDialog):
+    def __init__(self, class_items, selected_ids=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Class Filter")
+        self.class_items = class_items
+        self.selected_ids = selected_ids
+
+        main_layout = QVBoxLayout(self)
+
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Search")
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Filter classes...")
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_input)
+        main_layout.addLayout(search_layout)
+
+        self.list_widget = QListWidget()
+        self._populate_list()
+        main_layout.addWidget(self.list_widget)
+
+        action_layout = QHBoxLayout()
+        self.select_all_button = QPushButton("Select All")
+        self.clear_button = QPushButton("Clear")
+        action_layout.addWidget(self.select_all_button)
+        action_layout.addWidget(self.clear_button)
+        action_layout.addStretch()
+        main_layout.addLayout(action_layout)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        main_layout.addWidget(buttons)
+
+        self.search_input.textChanged.connect(self._filter_items)
+        self.select_all_button.clicked.connect(self._select_all_visible)
+        self.clear_button.clicked.connect(self._clear_visible)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+    def _populate_list(self):
+        self.list_widget.clear()
+        selected_all = self.selected_ids is None
+        for item in self.class_items:
+            class_id = item["id"]
+            name = item.get("name", str(class_id))
+            text = f"{class_id}: {name}"
+            list_item = QListWidgetItem(text)
+            list_item.setData(Qt.UserRole, class_id)
+            list_item.setFlags(
+                list_item.flags() | Qt.ItemIsUserCheckable
+            )
+            if selected_all or class_id in self.selected_ids:
+                list_item.setCheckState(Qt.Checked)
+            else:
+                list_item.setCheckState(Qt.Unchecked)
+            self.list_widget.addItem(list_item)
+
+    def _filter_items(self, text):
+        query = text.strip().lower()
+        for index in range(self.list_widget.count()):
+            item = self.list_widget.item(index)
+            item.setHidden(query not in item.text().lower())
+
+    def _select_all_visible(self):
+        for index in range(self.list_widget.count()):
+            item = self.list_widget.item(index)
+            if not item.isHidden():
+                item.setCheckState(Qt.Checked)
+
+    def _clear_visible(self):
+        for index in range(self.list_widget.count()):
+            item = self.list_widget.item(index)
+            if not item.isHidden():
+                item.setCheckState(Qt.Unchecked)
+
+    def get_selected_ids(self):
+        selected_ids = []
+        for index in range(self.list_widget.count()):
+            item = self.list_widget.item(index)
+            if item.checkState() == Qt.Checked:
+                selected_ids.append(item.data(Qt.UserRole))
+        return selected_ids
+
 
 class AutoLabelingWidget(QWidget):
     new_model_selected = pyqtSignal(str)
@@ -59,6 +235,7 @@ class AutoLabelingWidget(QWidget):
         "button_send",
         "button_add_point",
         "button_add_rect",
+        "button_class_filter",
         "add_pos_rect",
         "add_neg_rect",
         "button_run_rect",
@@ -147,6 +324,7 @@ class AutoLabelingWidget(QWidget):
             self.florence2_select_combobox.setEnabled(enable)
             self.remote_server_select_combobox.setEnabled(enable)
             self.remote_task_select_combobox.setEnabled(enable)
+            self.button_class_filter.setEnabled(enable)
 
         self.model_manager.prediction_started.connect(
             lambda: set_enable_tools(False)
@@ -160,6 +338,7 @@ class AutoLabelingWidget(QWidget):
         self.initial_iou_value = 0
         self.initial_preserve_annotations_state = False
         self.skip_detection = False
+        self.remote_server_class_selection = {}
 
         # ===================================
         #  Auto labeling buttons
@@ -181,6 +360,13 @@ class AutoLabelingWidget(QWidget):
         # --- Configuration for: button_reset_tracker ---
         self.button_reset_tracker.setStyleSheet(get_normal_button_style())
         self.button_reset_tracker.clicked.connect(self.on_reset_tracker)
+
+        # --- Configuration for: button_class_filter ---
+        self.button_class_filter.setStyleSheet(get_normal_button_style())
+        self.button_class_filter.setToolTip(
+            self.tr("Filter classes for the selected remote model")
+        )
+        self.button_class_filter.clicked.connect(self.on_class_filter_clicked)
 
         # --- Configuration for: button_set_api_token ---
         self.button_set_api_token.setStyleSheet(get_normal_button_style())
@@ -890,6 +1076,7 @@ class AutoLabelingWidget(QWidget):
             "gd_select_combobox",
             "florence2_select_combobox",
             "remote_server_select_combobox",
+            "button_class_filter",
             "remote_task_select_combobox",
             "button_auto_decode",
             "button_cropping",
@@ -1100,6 +1287,122 @@ class AutoLabelingWidget(QWidget):
         """Populate remote server combobox"""
         self.remote_server_select_combobox.clear()
 
+    def _normalize_class_items(self, class_info):
+        if isinstance(class_info, dict):
+            items = []
+            for key, value in class_info.items():
+                try:
+                    class_id = int(key)
+                except (TypeError, ValueError):
+                    continue
+                name = str(value)
+                items.append({"id": class_id, "name": name})
+            return sorted(items, key=lambda item: item["id"]) or None
+
+        if isinstance(class_info, list):
+            items = []
+            for idx, item in enumerate(class_info):
+                if isinstance(item, dict):
+                    if "id" in item:
+                        try:
+                            class_id = int(item["id"])
+                        except (TypeError, ValueError):
+                            continue
+                        name = item.get("name", item.get("label", class_id))
+                    elif "name" in item:
+                        class_id = idx
+                        name = item["name"]
+                    else:
+                        continue
+                    items.append({"id": class_id, "name": str(name)})
+                else:
+                    items.append({"id": idx, "name": str(item)})
+            return items or None
+
+        return None
+
+    def _extract_remote_class_items(self, model_id, model_info):
+        for key in ["classes", "class_names", "labels"]:
+            class_info = model_info.get(key)
+            items = self._normalize_class_items(class_info)
+            if items:
+                return items
+
+        num_classes = model_info.get("num_classes", model_info.get("nc"))
+        dataset = model_info.get("dataset", model_info.get("data"))
+        display_name = model_info.get("display_name", "")
+        try:
+            num_classes = int(num_classes)
+        except (TypeError, ValueError):
+            num_classes = None
+
+        if (
+            num_classes == 80
+            or (dataset and "coco" in str(dataset).lower())
+            or "coco" in str(model_id).lower()
+            or "coco" in str(display_name).lower()
+        ):
+            return [
+                {"id": idx, "name": name}
+                for idx, name in enumerate(COCO_CLASS_NAMES)
+            ]
+
+        return None
+
+    def _refresh_class_filter_button(self, model_id, class_items):
+        selection = self.remote_server_class_selection.get(model_id)
+        total = len(class_items)
+        if selection is None or len(selection) == total:
+            self.button_class_filter.setText("Classes (All)")
+        else:
+            self.button_class_filter.setText(
+                f"Classes ({len(selection)}/{total})"
+            )
+
+    def _sync_remote_class_filter(self, model_id, class_items):
+        selection = self.remote_server_class_selection.get(model_id)
+        valid_ids = {item["id"] for item in class_items}
+        if selection is not None:
+            selection = set(selection) & valid_ids
+            if len(selection) == len(class_items):
+                selection = None
+            self.remote_server_class_selection[model_id] = selection
+        if selection is None:
+            self.model_manager.set_remote_server_classes(None)
+        else:
+            self.model_manager.set_remote_server_classes(sorted(selection))
+        self._refresh_class_filter_button(model_id, class_items)
+
+    def on_class_filter_clicked(self):
+        model_id = self.remote_server_select_combobox.currentData()
+        if not model_id:
+            return
+        available_models = (
+            self.model_manager.get_remote_server_available_models()
+        )
+        model_info = available_models.get(model_id, {})
+        class_items = self._extract_remote_class_items(model_id, model_info)
+        if not class_items:
+            info = self.model_manager.get_remote_server_model_info(model_id)
+            if info:
+                model_info = info
+                class_items = self._extract_remote_class_items(
+                    model_id, model_info
+                )
+        if not class_items:
+            return
+        selection = self.remote_server_class_selection.get(model_id)
+        dialog = ClassFilterDialog(class_items, selection, self)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_ids = dialog.get_selected_ids()
+            if len(selected_ids) == len(class_items):
+                self.remote_server_class_selection[model_id] = None
+            else:
+                self.remote_server_class_selection[model_id] = set(
+                    selected_ids
+                )
+            self._sync_remote_class_filter(model_id, class_items)
+
     @pyqtSlot()
     def on_remote_server_model_changed(self):
         """Handle remote server model change"""
@@ -1130,6 +1433,8 @@ class AutoLabelingWidget(QWidget):
         available_models = (
             self.model_manager.get_remote_server_available_models()
         )
+        if not available_models:
+            self.button_class_filter.hide()
 
         self.remote_server_select_combobox.blockSignals(True)
         self.remote_server_select_combobox.clear()
@@ -1242,6 +1547,10 @@ class AutoLabelingWidget(QWidget):
             return
 
         model_info = available_models[model_id]
+        if not self._extract_remote_class_items(model_id, model_info):
+            info = self.model_manager.get_remote_server_model_info(model_id)
+            if info:
+                model_info = info
         widgets_config = model_info.get("widgets", [])
         available_tasks = model_info.get("available_tasks", [])
 
@@ -1280,6 +1589,14 @@ class AutoLabelingWidget(QWidget):
                         self._on_toggle_preserve_existing_annotations_toggled(
                             widget_value
                         )
+
+        class_items = self._extract_remote_class_items(model_id, model_info)
+        if class_items:
+            self.button_class_filter.show()
+            self._sync_remote_class_filter(model_id, class_items)
+        else:
+            self.button_class_filter.hide()
+            self.model_manager.set_remote_server_classes(None)
 
                 if widget_placeholder is not None and hasattr(
                     widget, "setPlaceholderText"

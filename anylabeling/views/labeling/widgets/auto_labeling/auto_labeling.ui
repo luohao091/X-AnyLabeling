@@ -208,6 +208,13 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="button_class_filter">
+       <property name="text">
+        <string>Classes (All)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QComboBox" name="remote_task_select_combobox">
         <property name="currentIndex">
             <number>-1</number>

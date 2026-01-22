@@ -55,6 +55,7 @@ class RemoteServer(Model):
         self.epsilon_factor = 0.001
         self.replace = True
         self.reset_tracker_flag = False
+        self.class_filter = None
 
         self.current_task = None
 
@@ -94,6 +95,20 @@ class RemoteServer(Model):
             logger.error(f"Failed to fetch available models: {e}")
             return {}
 
+    def get_model_info(self, model_id):
+        """Fetch model info from remote server"""
+        try:
+            info_url = f"{self.server_url}/v1/models/{model_id}/info"
+            response = requests.get(
+                url=info_url, headers=self.headers, timeout=self.timeout
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("data", {})
+        except Exception as e:
+            logger.error(f"Failed to fetch model info: {e}")
+            return {}
+
     def get_batch_processing_mode(self):
         """Get batch processing mode for current model and task.
 
@@ -121,6 +136,15 @@ class RemoteServer(Model):
     def set_auto_labeling_marks(self, marks):
         """Set auto labeling marks"""
         self.marks = marks
+
+    def set_class_filter(self, class_ids):
+        if class_ids is None:
+            self.class_filter = None
+        else:
+            try:
+                self.class_filter = sorted({int(cid) for cid in class_ids})
+            except (TypeError, ValueError):
+                self.class_filter = None
 
     def set_auto_labeling_preserve_existing_annotations_state(self, state):
         """Toggle the preservation of existing annotations based on the checkbox state."""
@@ -192,6 +216,8 @@ class RemoteServer(Model):
         params["conf_threshold"] = self.conf_threshold
         params["iou_threshold"] = self.iou_threshold
         params["epsilon_factor"] = self.epsilon_factor
+        if self.class_filter is not None:
+            params["classes"] = self.class_filter
 
         if text_prompt:
             params["text_prompt"] = text_prompt.rstrip(".")

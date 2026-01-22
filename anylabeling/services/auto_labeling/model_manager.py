@@ -2233,6 +2233,14 @@ class ModelManager(QObject):
         if self.loaded_model_config["type"] == "remote_server":
             self.loaded_model_config["model"].set_model_id(model_id)
 
+    def set_remote_server_classes(self, class_ids):
+        """Set remote server class filter"""
+        if self.loaded_model_config is None:
+            return
+
+        if self.loaded_model_config["type"] == "remote_server":
+            self.loaded_model_config["model"].set_class_filter(class_ids)
+
     def get_remote_server_available_models(self):
         """Get available models from remote server"""
         if self.loaded_model_config is None:
@@ -2240,6 +2248,15 @@ class ModelManager(QObject):
 
         if self.loaded_model_config["type"] == "remote_server":
             return self.loaded_model_config["model"].get_available_models()
+        return {}
+
+    def get_remote_server_model_info(self, model_id):
+        """Get remote server model info"""
+        if self.loaded_model_config is None:
+            return {}
+
+        if self.loaded_model_config["type"] == "remote_server":
+            return self.loaded_model_config["model"].get_model_info(model_id)
         return {}
 
     def get_remote_server_current_model_id(self):
